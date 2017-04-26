@@ -10,14 +10,12 @@ from dateutil import parser
 from functools import reduce
 
 def scrap_articles(project_dir, batch_size, begin_index = 0):
+    """ Download the articles from prior populated index and store them to mysql database. """
     
-    # ambil daftar database file
+    # get the database files
     db_files = [f for f in os.listdir(project_dir) if f.endswith('.db')]
     
-    # if 'berita.db' in db_files:
-        # db_files.remove('berita.db')
-    
-    # baca data dari database files
+    # read the index from database files
     items = []
     read_links = set()
     for dbf in db_files:
@@ -34,11 +32,9 @@ def scrap_articles(project_dir, batch_size, begin_index = 0):
         cur.close()
         conn.close()
     
-    # untuk setiap 100 url, download dengan newspaper
-    # ekstrak judul, penulis, tanggal diterbitkan, dan isi berita
-    
     article_rows = []
     
+    # process the articles in batch_size 
     count = 0
     for i in items:
         count = count + 1
@@ -48,25 +44,31 @@ def scrap_articles(project_dir, batch_size, begin_index = 0):
         
         try:
             a = Article(i[0], language='id')
+            
+            # download the article
             a.download()
+            
+            # parse the article to extract the title, authors, text, publish date
             a.parse()
             
             if a.publish_date is None:
                 a.publish_date = parser.parse(i[1])
             
-            # persiapkan data untuk dimasukkan ke mysql database
+            # prepare the data for inserting to mysql database
             article_rows.append((a.url, ','.join(a.authors), a.publish_date.strftime('%Y-%m-%d'), a.title, a.text))
         except:
             print('Gagal mengunduh artikel ', a.url)
         
         if count % batch_size == 0:
-            # jalankan perintah SQL
+            # execute the SQL command
             sql_insert_articles(article_rows)
             article_rows.clear()
             
             print('# articles processed: ', count)
 
 def download_rss():
+    """ Populate the article index from RSS feed and store it to database file using sqlite. """
+    
     articles = []
     
     rss_sources = [('http://www.republika.co.id/rss',['/nasional/']), \
@@ -92,11 +94,13 @@ def download_rss():
     kompas_items = fetch_from_website('http://nasional.kompas.com', ['/nasional.kompas','megapolitan.kompas','regional.kompas'])
     articles.extend(kompas_items)
     
-    # insert into database
+    # insert into database file
     filename = datetime.date.today().strftime('%d%m%Y') + '.db'
     insert_into_db(filename, articles)
 
 def download_website():
+    """ Populate the article index directly from website and store it to database file using sqlite. """
+    
     articles = []
     
     news_sources = [('http://www.republika.co.id',['/nasional/']), \
@@ -125,9 +129,12 @@ def download_website():
     print('#articles: %d', len(rows))
 
 def accept_url(str_list,str_url):
+    """ Return True if any element in str_list is in the str_url. """
     return reduce(lambda y, z: y or z, map(lambda x: x in str_url, str_list))
     
 def fetch_rss_feed(url, string_contains):
+    """ Fetch the RSS entries from source url and filter by string_contains. """
+    
     print('Fetching RSS from', url)
     
     d = feedparser.parse(url)
@@ -139,6 +146,8 @@ def fetch_rss_feed(url, string_contains):
     return items
 
 def fetch_from_website(url, string_contains):
+    """ Fetch the RSS entries from website using newspaper library. """
+    
     print('Fetching articles from website', url)
 
     # use newspaper library for scraping
@@ -151,6 +160,8 @@ def fetch_from_website(url, string_contains):
     return items
     
 def insert_into_db(db_filename,rows):
+    """ Insert the entries to database file. """
+    
     if not os.path.isfile(db_filename):
         conn = sqlite3.connect(db_filename)
         cur = conn.cursor()
@@ -172,6 +183,8 @@ def insert_into_db(db_filename,rows):
     conn.close()
     
 def sql_insert_articles(rows_to_insert):
+    """ Insert the articles to the primary database (MySQL is used here). """
+    
     cnx = mysql.connector.connect(user='...', password='...', host='...', database='berita')
     cursor = cnx.cursor()
     
