@@ -55,7 +55,7 @@ def scrap_articles(project_dir, batch_size, begin_index = 0):
                 a.publish_date = parser.parse(i[1])
             
             # prepare the data for inserting to mysql database
-            article_rows.append((a.url, ','.join(a.authors), a.publish_date.strftime('%Y-%m-%d'), a.title, a.text))
+            article_rows.append((a.url, ','.join(a.authors), a.publish_date.strftime('%Y-%m-%d'), a.title, a.text, a.top_image))
         except:
             print('Gagal mengunduh artikel ', a.url)
         
@@ -188,7 +188,7 @@ def sql_insert_articles(rows_to_insert):
     cnx = mysql.connector.connect(user='...', password='...', host='...', database='berita')
     cursor = cnx.cursor()
     
-    add_article = ('INSERT INTO articles(article_url,authors,publish_date,title,content) VALUES(%s,%s,%s,%s,%s)')
+    add_article = ('INSERT INTO articles(article_url,authors,publish_date,title,content,image_url) VALUES(%s,%s,%s,%s,%s,%s)')
     
     for row in rows_to_insert:
         try:
