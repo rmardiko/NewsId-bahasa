@@ -33,6 +33,7 @@ def scrap_articles(project_dir, batch_size, begin_index = 0):
         conn.close()
     
     article_rows = []
+    urls_download_later = []
     
     # process the articles in batch_size 
     count = 0
@@ -57,6 +58,7 @@ def scrap_articles(project_dir, batch_size, begin_index = 0):
             # prepare the data for inserting to mysql database
             article_rows.append((a.url, ','.join(a.authors), a.publish_date.strftime('%Y-%m-%d'), a.title, a.text, a.top_image))
         except:
+            urls_download_later(i[0])
             print('Gagal mengunduh artikel ', a.url)
         
         if count % batch_size == 0:
@@ -65,6 +67,10 @@ def scrap_articles(project_dir, batch_size, begin_index = 0):
             article_rows.clear()
             
             print('# articles processed: ', count)
+    
+    # insert the failed download
+    if len(urls_download_later) > 0:
+        sql_insert_download_later(urls_download_later)
 
 def download_rss():
     """ Populate the article index from RSS feed and store it to database file using sqlite. """
@@ -195,6 +201,24 @@ def sql_insert_articles(rows_to_insert):
             cursor.execute(add_article, row)
         except:
             print('Gagal insert ke database ', row[0])
+    
+    cnx.commit()
+    
+    cursor.close()
+    cnx.close()
+
+def sql_insert_download_later(rows_to_insert):
+    """ Insert the urls to download later. """
+    cnx = mysql.connector.connect(user='...', password='...', host='...', database='berita')
+    cursor = cnx.cursor()
+    
+    add_url = ('INSERT INTO download_later(article_url,last_attempt,repeated_n_times) VALUES(%s,%s,%s)')
+    
+    for url in rows_to_insert:
+        try:
+            cursor.execute(add_url, (url,datetime.date.today().strftime('%Y-%m-%d'),0))
+        except:
+            print('Gagal insert ke database ', url)
     
     cnx.commit()
     
